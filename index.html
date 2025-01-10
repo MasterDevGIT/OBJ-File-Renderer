@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D OBJ Renderer</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+    .controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <input type="file" id="file-input" accept=".obj" />
+  </div>
+
+  <!-- Use the latest Three.js library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script>
+    // Scene, Camera, Renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000); // Black background
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Lighting
+    const light = new THREE.DirectionalLight(0xffffff, 1); // White light
+    light.position.set(5, 5, 5).normalize();
+    scene.add(light);
+
+    // Add ambient light to ensure even lighting
+    const ambientLight = new THREE.AmbientLight(0x404040); // Soft white light
+    scene.add(ambientLight);
+
+    // Default Cube (white)
+    const cubeGeometry = new THREE.BoxGeometry();
+    const cubeMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff }); // White material
+    const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+    scene.add(cube);
+
+    // Camera Position
+    camera.position.z = 5;
+
+    // Track the current object to rotate and scale
+    let currentObject = cube;
+
+    // Mouse Controls for Rotation
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    document.addEventListener('mousedown', () => (isDragging = true));
+    document.addEventListener('mouseup', () => (isDragging = false));
+    document.addEventListener('mousemove', (event) => {
+      if (isDragging) {
+        const deltaX = event.clientX - previousMousePosition.x;
+        const deltaY = event.clientY - previousMousePosition.y;
+        currentObject.rotation.y += deltaX * 0.01;
+        currentObject.rotation.x += deltaY * 0.01;
+      }
+      previousMousePosition = { x: event.clientX, y: event.clientY };
+    });
+
+    // Mouse Wheel Controls for Scaling
+    document.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      const scaleFactor = 1.1; // Scale factor for zooming in/out
+      if (event.deltaY < 0) {
+        // Scroll up: increase size
+        currentObject.scale.multiplyScalar(scaleFactor);
+      } else {
+        // Scroll down: decrease size
+        currentObject.scale.divideScalar(scaleFactor);
+      }
+    });
+
+    // File Input for OBJ
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const contents = e.target.result;
+          const loader = new THREE.OBJLoader();
+          const obj = loader.parse(contents);
+
+          // Set material to white for all parts of the OBJ
+          obj.traverse((child) => {
+            if (child.isMesh) {
+              child.material = new THREE.MeshPhongMaterial({ color: 0xffffff }); // White material
+            }
+          });
+
+          // Center the object and scale it if necessary
+          const box = new THREE.Box3().setFromObject(obj);
+          const center = box.getCenter(new THREE.Vector3());
+          obj.position.sub(center); // Center the object
+          const size = box.getSize(new THREE.Vector3());
+          const maxSize = Math.max(size.x, size.y, size.z);
+          const scale = 5 / maxSize; // Scale the object to fit within a reasonable size
+          obj.scale.set(scale, scale, scale);
+
+          // Remove the previous object (if any) and add the new one
+          scene.remove(currentObject);
+          scene.add(obj);
+          currentObject = obj; // Update the current object to rotate and scale
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Window Resize Handling
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
